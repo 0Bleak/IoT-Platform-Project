@@ -171,7 +171,8 @@ Même sans stress externe :
 
 Question fondamentale :
 
-Pourquoi existe-t-il du jitter alors qu’aucune charge supplémentaire n’est lancée ?
+> “Pourquoi existe-t-il du jitter alors qu’aucune charge supplémentaire n’est lancée ?“
+
 Pour ça on peut considérer de nombreux points différents liés au fonctionnement de l'OS :  interruptions système, gestion mémoire, processus système, imprécision de sleep(), etc.
 
 ---
