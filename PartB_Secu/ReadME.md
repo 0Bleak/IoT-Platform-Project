@@ -179,7 +179,7 @@ Test :
 
 ---
 
-## 5.3 Ce que cela protège
+## 5.3 Ce que cela protège
 
 Empêche un client anonyme d’injecter des messages.
 
@@ -195,7 +195,7 @@ Objectif :
 
 > Limiter qui peut appeler Core Command.
 
-## 6.1 Restriction via firewall (solution simple)
+## 6.1 Restriction via firewall (solution simple)
 
 Activer UFW :
 
@@ -208,7 +208,7 @@ Maintenant :
 
 > Seules les machines du réseau local peuvent appeler Core Command.
 
-# 6.2 Limites
+## 6.2 Limites
 
 Pas d’authentification utilisateur.
 
