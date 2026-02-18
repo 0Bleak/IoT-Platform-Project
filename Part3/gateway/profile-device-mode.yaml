@@ -1,0 +1,21 @@
+name: device-mode-profile
+description: "Device with a Mode that can be set to NORMAL/DEGRADED"
+manufacturer: "Course"
+model: "RaspberryPi"
+labels:
+  - "mqtt"
+  - "teaching"
+
+deviceResources:
+  - name: Mode
+    description: "Operating mode"
+    properties:
+      valueType: String
+      readWrite: RW
+      defaultValue: "NORMAL"
+
+deviceCommands:
+  - name: SetMode
+    readWrite: W
+    resourceOperations:
+      - deviceResource: Mode
