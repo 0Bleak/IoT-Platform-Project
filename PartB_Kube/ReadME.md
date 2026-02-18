@@ -1,4 +1,4 @@
-# Section Bonus 2 — KubeEdge : orchestration Edge « réaliste » autour d’EdgeX
+# Section Bonus — KubeEdge : orchestration Edge « réaliste » autour d’EdgeX
 
 ---
 
