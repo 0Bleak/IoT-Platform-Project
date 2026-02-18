@@ -1,0 +1,227 @@
+# policy-controller-deploy.yaml
+# Déploie un "policy controller" Python qui :
+# - récupère périodiquement des events EdgeX (Core Data)
+# - décide NORMAL/DEGRADED
+# - appelle EdgeX Core Command pour envoyer SetMode
+#
+# IMPORTANT :
+# - Il faut que EdgeX soit déjà déployé (docker-compose ou pods) et accessible depuis le node.
+# - Il faut que le device (device1) + profile (SetMode) existent déjà dans EdgeX.
+#
+# Appliquer :
+#   kubectl apply -f policy-controller-deploy.yaml
+# Logs :
+#   kubectl -n tp-edge logs -f deploy/policy-controller
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: policy-controller-code
+  namespace: tp-edge
+data:
+  policy_controller.py: |
+    import json
+    import os
+    import time
+    from urllib.request import Request, urlopen
+    from urllib.error import URLError, HTTPError
+
+    EDGEX_COREDATA = os.getenv("EDGEX_COREDATA", "http://edgex-core-data:59880")
+    EDGEX_CORECMD  = os.getenv("EDGEX_CORECMD",  "http://edgex-core-command:59882")
+    DEVICE_NAME    = os.getenv("DEVICE_NAME", "device1")
+    COMMAND_NAME   = os.getenv("COMMAND_NAME", "SetMode")
+
+    # Décision
+    MISS_RATE_THRESHOLD = float(os.getenv("MISS_RATE_THRESHOLD", "0.05"))  # 5% par défaut
+    POLL_PERIOD_S       = float(os.getenv("POLL_PERIOD_S", "1.0"))
+    MAX_AGE_MS          = int(os.getenv("MAX_AGE_MS", "5000"))  # ignorer events trop vieux
+
+    # Mapping de mode
+    MODE_HIGH = os.getenv("MODE_HIGH", "DEGRADED")
+    MODE_OK   = os.getenv("MODE_OK",   "NORMAL")
+
+    # Timeouts réseau (TP: éviter les blocages)
+    HTTP_TIMEOUT_S = float(os.getenv("HTTP_TIMEOUT_S", "2.0"))
+
+    def http_get(url: str) -> dict:
+      req = Request(url, method="GET")
+      with urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+    def http_put_json(url: str, payload: dict) -> int:
+      data = json.dumps(payload).encode("utf-8")
+      req = Request(url, data=data, method="PUT", headers={"Content-Type": "application/json"})
+      with urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
+        return resp.status
+
+    def now_ms() -> int:
+      return int(time.time() * 1000)
+
+    def extract_miss_rate(event: dict):
+      # EdgeX event structure (v2): readings list
+      readings = event.get("readings", [])
+      # On cherche un reading dont resourceName ressemble à miss_rate / missRate / miss_rate_value etc.
+      candidates = []
+      for r in readings:
+        rn = (r.get("resourceName") or r.get("name") or "").lower()
+        if "miss" in rn and "rate" in rn:
+          candidates.append(r)
+      if not candidates:
+        return None
+
+      # Priorité au premier trouvé
+      r = candidates[0]
+      # value peut être string
+      v = r.get("value")
+      try:
+        return float(v)
+      except Exception:
+        return None
+
+    def latest_event_url(device: str) -> str:
+      # Filtre : events par deviceName, limite 1, tri desc si supporté.
+      # Selon version EdgeX, "sort" peut ne pas exister -> on prend limit=10 et on choisit le plus récent.
+      return f"{EDGEX_COREDATA}/api/v2/event/device/name/{device}?limit=10"
+
+    def pick_newest(events: list) -> dict | None:
+      if not events:
+        return None
+      # event["origin"] est souvent en ns ou ms selon version; on compare numériquement.
+      def origin_num(e):
+        try:
+          return int(e.get("origin", 0))
+        except Exception:
+          return 0
+      return max(events, key=origin_num)
+
+    def is_fresh(event: dict) -> bool:
+      # On utilise origin si disponible, sinon on ne filtre pas.
+      try:
+        origin = int(event.get("origin", 0))
+      except Exception:
+        return True
+      # Heuristique: origin peut être en ns -> ramener en ms si très grand.
+      if origin > 10**13:  # > ~year 2286 in ms; donc probablement ns
+        origin_ms = origin // 1_000_000
+      else:
+        origin_ms = origin
+      return abs(now_ms() - origin_ms) <= MAX_AGE_MS
+
+    def command_url(device: str, command: str) -> str:
+      # Endpoint "simple" souvent rencontré. Si votre EdgeX expose un endpoint différent,
+      # adaptez ici (ou utilisez l'étape de découverte via curl dans le sujet).
+      return f"{EDGEX_CORECMD}/api/v2/device/name/{device}/command/{command}"
+
+    def main():
+      last_mode = None
+      print(f"[policy] Starting with COREDATA={EDGEX_COREDATA} CORECMD={EDGEX_CORECMD} device={DEVICE_NAME}", flush=True)
+
+      while True:
+        try:
+          payload = http_get(latest_event_url(DEVICE_NAME))
+          events = payload.get("events") or payload  # selon impl, peut être {"events":[...]} ou direct list
+          if isinstance(events, dict):
+            events = events.get("events", [])
+          if not isinstance(events, list):
+            events = []
+
+          e = pick_newest(events)
+          if e is None:
+            print("[policy] No events yet", flush=True)
+            time.sleep(POLL_PERIOD_S)
+            continue
+
+          if not is_fresh(e):
+            print("[policy] Latest event too old -> skip", flush=True)
+            time.sleep(POLL_PERIOD_S)
+            continue
+
+          miss = extract_miss_rate(e)
+          if miss is None:
+            print("[policy] miss_rate not found in readings -> skip", flush=True)
+            time.sleep(POLL_PERIOD_S)
+            continue
+
+          mode = MODE_HIGH if miss > MISS_RATE_THRESHOLD else MODE_OK
+          if mode != last_mode:
+            url = command_url(DEVICE_NAME, COMMAND_NAME)
+            status = http_put_json(url, {"Mode": mode})
+            print(f"[policy] miss_rate={miss:.4f} -> mode={mode} (PUT {status})", flush=True)
+            last_mode = mode
+          else:
+            print(f"[policy] miss_rate={miss:.4f} -> mode stays {mode}", flush=True)
+
+        except HTTPError as he:
+          print(f"[policy][HTTPError] {he.code} {he.reason}", flush=True)
+        except URLError as ue:
+          print(f"[policy][URLError] {ue.reason}", flush=True)
+        except Exception as ex:
+          print(f"[policy][Exception] {ex}", flush=True)
+
+        time.sleep(POLL_PERIOD_S)
+
+    if __name__ == "__main__":
+      main()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: policy-controller
+  namespace: tp-edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: policy-controller
+  template:
+    metadata:
+      labels:
+        app: policy-controller
+    spec:
+      containers:
+        - name: policy-controller
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-u", "/app/policy_controller.py"]
+          env:
+            # À adapter si EdgeX n'est pas déployé dans Kubernetes.
+            # Si EdgeX tourne en docker-compose sur la gateway, mettez :
+            #   EDGEX_COREDATA=http://IP_GATEWAY:59880
+            #   EDGEX_CORECMD=http://IP_GATEWAY:59882
+            - name: EDGEX_COREDATA
+              value: "http://edgex-core-data:59880"
+            - name: EDGEX_CORECMD
+              value: "http://edgex-core-command:59882"
+            - name: DEVICE_NAME
+              value: "device1"
+            - name: COMMAND_NAME
+              value: "SetMode"
+            - name: MISS_RATE_THRESHOLD
+              value: "0.05"
+            - name: POLL_PERIOD_S
+              value: "1.0"
+            - name: MAX_AGE_MS
+              value: "5000"
+            - name: HTTP_TIMEOUT_S
+              value: "2.0"
+            - name: MODE_OK
+              value: "NORMAL"
+            - name: MODE_HIGH
+              value: "DEGRADED"
+          volumeMounts:
+            - name: app
+              mountPath: /app
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+      volumes:
+        - name: app
+          configMap:
+            name: policy-controller-code
+            items:
+              - key: policy_controller.py
+                path: policy_controller.py
