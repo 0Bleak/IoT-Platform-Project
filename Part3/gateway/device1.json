@@ -1,0 +1,18 @@
+{
+  "apiVersion": "v2",
+  "device": {
+    "name": "device1",
+    "description": "Raspberry device #1",
+    "serviceName": "device-mqtt",
+    "profileName": "device-mode-profile",
+    "protocols": {
+      "mqtt": {
+        "Broker": "tcp://mosquitto:1883",
+        "DeviceTopic": "tp/device1/metrics",
+        "CommandTopic": "tp/device1/cmd"
+      }
+    },
+    "adminState": "UNLOCKED",
+    "operatingState": "UP"
+  }
+}
