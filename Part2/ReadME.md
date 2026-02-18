@@ -55,7 +55,19 @@ Nous allons donc tester l’idée suivante :
 
 ---
 
+# 3. Comprendre ce que signifie “charge CPU”
+
+Avant d’adapter, il faut mesurer.
+
+La bibliothèque `psutil` fournit une estimation de la charge CPU :
+
+```python
+import psutil
+cpu_load = psutil.cpu_percent(interval=None)
+```
+
 Cette valeur :
+
 - varie entre 0 et 100,
 - représente l’occupation moyenne récente du CPU,
 - dépend des autres processus actifs.
@@ -129,7 +141,7 @@ Mais vous perdez en performance interne... C’est un compromis !
 
 # 7. Expérience 1 — Adaptatif sans stress
 
-Exécutez :
+Créez à partiru du fichier `rt_loop` un nouveau fichier qui exécutera la boucle adaptative indiquée ci-dessus. En théorie vous n'aurez que des modifications minimes à réaliser sur votre fichier de départ.
 
 ```python
 python3 rt_loop_adaptive.py --out logs/rt_E_adaptive_nominal.csv
@@ -221,7 +233,7 @@ Reliez votre réponse à la définition du hard real-time vue en Section 1.
 
 ## 9.3 Étape 3 — Observer l’évolution du workload
 
-Tracez le workload_ratio au cours du temps.
+Tracez le `workload_ratio` au cours du temps.
 
 Questions guidées :
 
