@@ -121,21 +121,6 @@ Documentation :
 - https://www.edgexfoundry.org/
 - https://docs.edgexfoundry.org/
 
----
-
-### Mesure énergétique (télémétrie système)
-
-Les systèmes embarqués modernes sont contraints par :
-
-- la consommation énergétique
-- les contraintes thermiques
-- les budgets de puissance
-
-Une estimation simplifiée de la puissance sera utilisée
-afin d’étudier les compromis performance / énergie.
-
-Documentation Raspberry Pi :
-- https://www.raspberrypi.com/documentation/
 
 ---
 
@@ -160,9 +145,9 @@ Ce projet a pour objectif de permettre aux étudiants de :
 
 ---
 
-### 3️⃣ Étudier les compromis énergie / performance
+### 3️⃣ Étudier les compromis systeme / performance
 
-- stabiliser une boucle coûte-t-il plus d’énergie ?
+- stabiliser une boucle est possible ?
 - quelles métriques sont réellement significatives ?
 
 ---
