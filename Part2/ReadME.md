@@ -108,17 +108,56 @@ Plus le workload est élevé :
 
 ---
 
-# 5. Logique simple d’adaptation
+## 5 — Introduction des modes de fonctionnement et logique d'adaptation
+
+Plutôt que de modifier directement la variable workload_ratio, nous allons introduire une notion plus structurée.
+
+Le système possède deux modes :
+
+- NORMAL
+- DEGRADED
+
+Mode NORMAL :
+- workload élevé
+- performance maximale
+- risque plus important de jitter sous forte charge
+
+Mode DEGRADED :
+- workload réduit
+- performance interne diminuée
+- meilleure stabilité temporelle
+
+Pourquoi introduire des modes ? Dans un système embarqué réel :
+
+- les changements de comportement sont rarement continus,
+- ils sont souvent organisés en états discrets.
+
+Exemples :
+
+Un drone :
+- Mode vol normal
+- Mode économie d’énergie
+
+Un robot :
+- Mode production
+- Mode sécurité
+
+Une passerelle industrielle :
+- Mode nominal
+- Mode dégradé
+
+Un système embarqué est souvent modélisé comme une machine à états.
+
+Nous allons donc modifier notre boucle pour qu’elle fonctionne en mode NORMAL ou DEGRADED, en fonction de la charge CPU observée.
 
 Nous utilisons une règle volontairement simple :
 
-- Si CPU > 70 % → réduire workload
-- Si CPU < 40 % → augmenter workload
-- Sinon → ne rien changer
+- Si CPU > 70 % → passer en mode DEGRADED
+- Si CPU < 40 % → revenir en mode NORMAL
+- Sinon → conserver le mode courant
+  
 
-Pourquoi ces valeurs ?
-
-Elles sont arbitraires, mais permettent de voir un comportement.
+Pourquoi ces valeurs ? Elles sont arbitraires, mais permettent de voir un comportement.
 
 ---
 
@@ -147,6 +186,19 @@ Créez à partiru du fichier `rt_loop` un nouveau fichier qui exécutera la bouc
 python3 rt_loop_adaptive.py --out logs/rt_E_adaptive_nominal.csv
 ```
 
+On attendra donc quelque chose de simple ici, du type : 
+```python
+if cpu_load > 70:
+    mode = "DEGRADED"
+elif cpu_load < 40:
+    mode = "NORMAL"
+
+if mode == "NORMAL":
+    workload_ratio = 0.7
+else:
+    workload_ratio = 0.3
+```
+
 Observe :
 
 - comment le workload évolue dans le temps,
@@ -162,8 +214,7 @@ Observe :
 
 # 8. Expérience 2 — Adaptatif sous stress CPU
 
-Nous allons maintenant reproduire exactement
-le scénario qui posait problème dans la Section 1 :
+Nous allons maintenant reproduire exactement le scénario qui posait problème dans la Section 1 :
 
 - une boucle périodique de 20 ms
 - une charge CPU concurrente
