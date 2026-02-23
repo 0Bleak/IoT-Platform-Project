@@ -289,7 +289,7 @@ Fixer l’affinité :
 - réduit les migrations
 - peut stabiliser certaines mesures
 
----
+---`
 
 # Exercice 5 — Comprendre l’affinité
 
@@ -311,6 +311,8 @@ Vous devez produire :
 
 1. un tableau comparatif des 4 cas
 2. au minimum deux graphiques : 1) jitter dans le temps ; 2) distribution du jitter
+
+Pour installer `pandas` au besoin : `sudo apt install python3-pandas`
 
 ---
 
