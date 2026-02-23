@@ -1,65 +1,70 @@
 version: "3.8"
 
 services:
+
+  consul:
+    image: hashicorp/consul:1.16
+    container_name: edgex-consul
+    ports:
+      - "8500:8500"
+    command: agent -dev -client=0.0.0.0
+    networks: [edgex-net]
+
+  redis:
+    image: redis:7-alpine
+    container_name: edgex-redis
+    ports:
+      - "6379:6379"
+    networks: [edgex-net]
+
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: mosquitto
     ports:
       - "1883:1883"
-    volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
     networks: [edgex-net]
 
   core-metadata:
-    image: edgexfoundry/core-metadata:3.1
+    image: edgexfoundry/core-metadata-arm64:3.1.1
     container_name: edgex-core-metadata
-    ports: ["59881:59881"]
+    depends_on: [consul, redis]
     networks: [edgex-net]
     environment:
       EDGEX_SECURITY_SECRET_STORE: "false"
+      EDGEX_COMMON_DB_HOST: "redis"
+      EDGEX_COMMON_MESSAGEBUS_HOST: "redis"
 
   core-data:
-    image: edgexfoundry/core-data:3.1
+    image: edgexfoundry/core-data-arm64:3.1.1
     container_name: edgex-core-data
-    ports: ["59880:59880"]
+    depends_on: [consul, redis]
     networks: [edgex-net]
     environment:
       EDGEX_SECURITY_SECRET_STORE: "false"
-
-  core-command:
-    image: edgexfoundry/core-command:3.1
-    container_name: edgex-core-command
-    ports: ["59882:59882"]
-    networks: [edgex-net]
-    environment:
-      EDGEX_SECURITY_SECRET_STORE: "false"
+      EDGEX_COMMON_DB_HOST: "redis"
+      EDGEX_COMMON_MESSAGEBUS_HOST: "redis"
 
   device-mqtt:
-    image: edgexfoundry/device-mqtt:3.1
+    image: edgexfoundry/device-mqtt:3.1.1
     container_name: edgex-device-mqtt
-    ports: ["59982:59982"]
-    networks: [edgex-net]
     depends_on:
       - mosquitto
       - core-metadata
-      - core-data
-      - core-command
+      - redis
+    networks: [edgex-net]
     environment:
       EDGEX_SECURITY_SECRET_STORE: "false"
-      # Important: on force device-mqtt à viser mosquitto du compose
       MQTT_BROKER: "tcp://mosquitto:1883"
+      EDGEX_COMMON_MESSAGEBUS_HOST: "redis"
 
   ui:
-    image: edgexfoundry/edgex-ui:3.1
+    image: edgexfoundry/edgex-ui:3.1.0
     container_name: edgex-ui
-    ports: ["4000:4000"]
-    networks: [edgex-net]
+    ports:
+      - "4000:4000"
     depends_on:
       - core-metadata
-      - core-data
-      - core-command
-    environment:
-      EDGEX_SECURITY_SECRET_STORE: "false"
+    networks: [edgex-net]
 
 networks:
   edgex-net:
