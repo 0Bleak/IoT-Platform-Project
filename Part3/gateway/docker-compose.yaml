@@ -58,7 +58,7 @@ services:
       EDGEX_COMMON_MESSAGEBUS_HOST: "redis"
 
   ui:
-    image: edgexfoundry/edgex-ui:3.1.0
+    image: edgexfoundry/edgex-ui-arm64:3.1.0
     container_name: edgex-ui
     ports:
       - "4000:4000"
